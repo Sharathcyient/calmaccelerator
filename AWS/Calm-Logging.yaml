@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ""
+
+# Parameters:
+  # LoggroupARNName: 
+    # Type: AWS::Logs::LogGroup::ARN
+#   S3bucketCloudtrail: 
+#    Type: String
+#    Default: calm-cloudtrail-bucket
+#   backupS3bucket: 
+#    Type: String
+#    Default: calm-backupbucket
+Resources:
+  # calmLogGroup: 
+    # Type: AWS::Logs::LogGroup
+    # Properties: 
+      # LogGroupName: calm-log-group
+  CloudTrail:
+    Type: "AWS::CloudTrail::Trail"
+    Properties:
+      TrailName: "calm-ManaglogsEventsTrail"
+      IsLogging: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - IncludeManagementEvents: true
+          ReadWriteType: "All"
+        - DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub "arn:${AWS::Partition}:s3"
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      S3BucketName:
+        Ref: "S3BucketForCloudTrailCloudTrail"
+      CloudWatchLogsLogGroupArn: "arn:aws:logs:ap-south-1:066365337298:log-group:Cloudtrailloggroup:*"
+#      CloudWatchLogsLogGroupArn: !Ref LoggroupARNName
+      CloudWatchLogsRoleArn:
+        Fn::GetAtt:
+          - "IamRoleForCwLogsCloudTrail"
+          - "Arn"
+    DependsOn: "S3BucketPolicy"
+  S3BucketForCloudTrailCloudTrail:
+    Type: "AWS::S3::Bucket"
+    Properties: 
+      AccessControl: Private
+      BucketName: calm-ctp-cloudtraillogdemo
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256      
+      PublicAccessBlockConfiguration:
+         BlockPublicAcls: true
+         BlockPublicPolicy: true
+         IgnorePublicAcls: true
+         RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: testing-logs
+  LoggingBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: LogDeliveryWrite
+      BucketName: calm-cloudtrailbucketbackupdemo
+  S3BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket:
+        Ref: "S3BucketForCloudTrailCloudTrail"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AWSCloudTrailBucketPermissionsCheck"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "cloudtrail.amazonaws.com"
+            Action: "s3:GetBucketAcl"
+            Resource:
+              Fn::GetAtt:
+                - "S3BucketForCloudTrailCloudTrail"
+                - "Arn"
+          - Sid: " AWSConfigBucketDelivery"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "cloudtrail.amazonaws.com"
+            Action: "s3:PutObject"
+            Resource:
+              Fn::Join:
+                - ""
+                -
+                  - Fn::GetAtt:
+                      - "S3BucketForCloudTrailCloudTrail"
+                      - "Arn"
+                  - "/AWSLogs/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: "bucket-owner-full-control"
+  IamRoleForCwLogsCloudTrail:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "calm-iamrole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ""
+            Effect: "Allow"
+            Principal:
+              Service: "cloudtrail.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "allow-access-to-cw-logs"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+Parameters: {}
+Metadata: {}
+Conditions: {}
